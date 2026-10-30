@@ -19,10 +19,21 @@
     }
     #aviso.oculto { opacity: 0; }
     #aviso.error { background: #9b1c1c; }
+    #girar {
+      position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+      z-index: 10; display: none;
+      padding: 14px 28px; border: none; border-radius: 30px;
+      background: #1A7F86; color: white;
+      font: bold 18px Arial, sans-serif;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .35);
+    }
+    #girar.activo { background: #9b1c1c; }
+    #girar.visible { display: block; }
   </style>
 </head>
 <body>
   <div id="aviso">Autoriza la cámara y apunta a una de las tarjetas: dinosaurio, escudo o gorila</div>
+  <button id="girar" type="button">Girar 360°</button>
 
   <a-scene
     mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 2; filterMinCF: 0.0001; filterBeta: 0.001;"
@@ -44,37 +55,57 @@
     <a-light type="ambient" intensity="1"></a-light>
     <a-light type="directional" intensity="1.5" position="1 2 3"></a-light>
 
-    <!-- targetIndex 0 = marcador.png (dinosaurio). La tarjeta mide 1 de ancho -->
+    <!-- Cada modelo va dentro de una entidad "giro": el botón la hace dar vueltas sobre su propio eje.
+         La tarjeta mide 1 de ancho: ajusta scale para hacer el modelo más grande o más chico -->
+
+    <!-- targetIndex 0 = marcador.png (dinosaurio) -->
     <a-entity id="target-dino" mindar-image-target="targetIndex: 0">
-      <a-gltf-model src="#dino"
-                    rotation="10 -40 0"
-                    position="0 -0.3 0.05"
-                    scale="0.75 0.75 0.75"></a-gltf-model>
+      <a-entity class="giro" position="0 -0.3 0.05">
+        <a-gltf-model src="#dino" rotation="10 -40 0" scale="0.75 0.75 0.75"></a-gltf-model>
+      </a-entity>
     </a-entity>
 
     <!-- targetIndex 1 = marcador-escudo.png (escudo de hueso) -->
     <a-entity id="target-escudo" mindar-image-target="targetIndex: 1">
-      <a-gltf-model src="#escudo"
-                    rotation="0 -20 0"
-                    position="0 -0.49 0.08"
-                    scale="0.76 0.76 0.76"></a-gltf-model>
+      <a-entity class="giro" position="0 -0.49 0.08">
+        <a-gltf-model src="#escudo" rotation="0 -20 0" scale="0.76 0.76 0.76"></a-gltf-model>
+      </a-entity>
     </a-entity>
 
     <!-- targetIndex 2 = marcador-gorila.png (gorila) -->
     <a-entity id="target-gorila" mindar-image-target="targetIndex: 2">
-      <a-gltf-model src="#gorila"
-                    rotation="0 -30 0"
-                    position="0 -0.49 0.08"
-                    scale="0.82 0.82 0.82"></a-gltf-model>
+      <a-entity class="giro" position="0 -0.49 0.08">
+        <a-gltf-model src="#gorila" rotation="0 -30 0" scale="0.82 0.82 0.82"></a-gltf-model>
+      </a-entity>
     </a-entity>
   </a-scene>
 
   <script>
-    // Oculta el aviso mientras se vea algún target y lo muestra cuando se pierden todos.
     const aviso = document.getElementById('aviso');
+    const boton = document.getElementById('girar');
     const escena = document.querySelector('a-scene');
     const targets = document.querySelectorAll('[mindar-image-target]');
+    const giros = document.querySelectorAll('.giro');
     let visibles = 0;
+    let girando = false;
+
+    // Botón: empieza o detiene el giro de 360° (una vuelta cada 4 segundos)
+    boton.addEventListener('click', () => {
+      girando = !girando;
+      giros.forEach((g) => {
+        if (girando) {
+          const y = g.object3D.rotation.y * 180 / Math.PI;
+          g.setAttribute('animation__giro', {
+            property: 'rotation', from: `0 ${y} 0`, to: `0 ${y + 360} 0`,
+            dur: 4000, easing: 'linear', loop: true
+          });
+        } else {
+          g.removeAttribute('animation__giro');
+        }
+      });
+      boton.textContent = girando ? 'Detener giro' : 'Girar 360°';
+      boton.classList.toggle('activo', girando);
+    });
 
     escena.addEventListener('arReady', () => {
       aviso.textContent = 'Apunta la cámara a una de las tarjetas';
@@ -84,16 +115,20 @@
       aviso.classList.remove('oculto');
       aviso.textContent = 'No se pudo abrir la cámara. Revisa los permisos y abre la página con https.';
     });
+
+    // Oculta el aviso y muestra el botón mientras se vea algún target
     targets.forEach((target) => {
       target.addEventListener('targetFound', () => {
         visibles++;
         aviso.classList.add('oculto');
+        boton.classList.add('visible');
       });
       target.addEventListener('targetLost', () => {
         visibles = Math.max(0, visibles - 1);
         if (visibles === 0) {
           aviso.textContent = 'Target perdido: vuelve a apuntar la cámara';
           aviso.classList.remove('oculto');
+          boton.classList.remove('visible');
         }
       });
     });
